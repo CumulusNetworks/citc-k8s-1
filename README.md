@@ -22,6 +22,6 @@ ansible-playbook setup.yaml
 ```
 and the UIs are accessed at the Telemetry Server's (jumpbox) IP adderess at...
 
-NetQ       : http://IP:9000 (user/password = admin/CumulusNetQ!)
+* __NetQ__ : http://IP:9000 (user/password = admin/CumulusNetQ!)
 
-Kubernetes : http://IP:8001/ui (SKIP authentication)
+* __Kubernetes__ : http://IP:8001/ui (SKIP authentication)
