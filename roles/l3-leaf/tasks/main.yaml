@@ -1,0 +1,34 @@
+---
+- set_fact:
+    myvars: "{{ switchvars[inventory_hostname] }}"
+
+- name:  Unnumbered BGP routing (v4 & V6) to the hosts and spines
+  nclu:
+    commands:
+    - add bgp autonomous-system {{ myvars.ASN }}
+    - add loopback lo ip address {{ myvars.V4 }}/32
+    - add bgp router-id {{ myvars.V4 }}
+    - add loopback lo ipv6 address {{ myvars.V6 }}/128
+    - add bgp ipv4 unicast network {{ myvars.V4 }}/32
+    - add bgp ipv6 unicast network {{ myvars.V6 }}/128
+    - add bgp bestpath as-path multipath-relax
+    - add bgp neighbor {{ UPLINK_IFS }} interface remote-as external
+    - add bgp ipv4 unicast neighbor {{ UPLINK_IFS }} activate
+    - add bgp ipv6 unicast neighbor {{ UPLINK_IFS }} activate
+    - add interface {{ UPLINK_IFS }} mtu 9000
+    - add bgp neighbor {{ ACCESS_IFS }} interface remote-as external
+    - add bgp ipv4 unicast neighbor {{ ACCESS_IFS }} activate
+    - add bgp ipv6 unicast neighbor {{ ACCESS_IFS }} activate
+    - add interface {{ ACCESS_IFS }} mtu 9000
+    atomic: true
+    description: "unnumbered BGP leaf"
+- nclu:
+    commands:
+    - add bgp neighbor {{ LEAF_INET_IFS }} interface remote-as external
+    - add bgp ipv4 unicast neighbor {{ LEAF_INET_IFS }} activate
+    - add bgp ipv6 unicast neighbor {{ LEAF_INET_IFS }} activate
+    - add interface {{ LEAF_INET_IFS }} mtu 9000
+    atomic: true
+    description: "unnumbered BGP to Internet"
+  when: (inventory_hostname  == "leaf01") or (inventory_hostname == "leaf02")
+...

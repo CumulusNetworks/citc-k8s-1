@@ -1,0 +1,34 @@
+---
+- hosts: oob-mgmt-server
+  roles:
+  - telemetry-server
+
+- hosts: switches
+  roles:
+  - switch-common
+
+- hosts: leafs
+  roles:
+  - l3-leaf
+
+- hosts: spines
+  roles:
+  - l3-spine
+
+- hosts: servers
+  roles:
+  - server-common
+  become: yes
+
+- hosts: server01
+  roles:
+  - k8s-master
+
+- hosts: server02, server03, server04
+  roles:
+  - k8s-worker
+
+- hosts: server01
+  roles:
+  - demo
+...

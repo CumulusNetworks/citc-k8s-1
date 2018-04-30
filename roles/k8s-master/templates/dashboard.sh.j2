@@ -1,0 +1,33 @@
+#! /bin/bash
+
+kubectl get pods --all-namespaces | egrep -q "kubernetes\-dashboard" || {
+    echo "started dashboad" >> dashboard.log
+    kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/src/deploy/recommended/kubernetes-dashboard.yaml
+}
+
+kubectl get clusterrolebindings | egrep -q "kubernetes\-dashboard" || {
+    echo "installed rolebindings" >> dashboard.log
+    kubectl create -f dashboard.yml
+}
+
+PROXY_PID=$(ps aux | grep "[k]ubectl proxy" | awk '{print $2}')
+[ "$PROXY_PID" == "" ] || {
+    kill $PROXY_PID
+}
+
+while ! ps aux | grep -q "[d]ashboard.*insecure-bind-address"
+do
+    sleep 10
+done
+
+while ! kubectl get pods --all-namespaces | egrep -q "kube\-apiserver"
+do
+    sleep 10
+done
+
+nohup kubectl proxy --address="192.168.0.31" -p 8001 --accept-hosts='^*$' &
+
+sleep 20
+
+ps aux >> dashboard.log
+

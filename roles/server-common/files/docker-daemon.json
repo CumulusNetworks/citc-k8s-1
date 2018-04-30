@@ -1,0 +1,5 @@
+{
+ "bridge": "cbr0",
+ "ip-masq": false,
+ "iptables": false
+}

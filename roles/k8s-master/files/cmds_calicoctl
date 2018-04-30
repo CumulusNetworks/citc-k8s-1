@@ -1,0 +1,5 @@
+#! /bin/bash
+
+BASE=/home/cumulus
+sudo DATASTORE_TYPE=kubernetes KUBECONFIG=${BASE}/.kube/config ${BASE}/calicoctl node status
+sudo DATASTORE_TYPE=kubernetes KUBECONFIG=${BASE}/.kube/config ${BASE}/calicoctl get nodes

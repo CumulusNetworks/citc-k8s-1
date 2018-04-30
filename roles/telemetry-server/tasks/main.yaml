@@ -1,0 +1,80 @@
+#
+# The oob-mgmt-server acts as the Internet gateway to fabric
+#
+---
+- set_fact:
+    myvars: "{{ servervars[inventory_hostname] }}"
+
+- name:  Unnumbered BGP routing (v4 & v6) to the fabric
+  nclu:
+    commands:
+    - add loopback lo ip address {{ myvars.V4 }}/32
+    - add loopback lo ipv6 address {{ myvars.V6 }}/128
+    - add bgp autonomous-system {{ myvars.ASN }}
+    - add bgp router-id {{ myvars.V4 }}
+    - add bgp ipv4 unicast network {{ myvars.V4 }}/32
+    - add bgp ipv6 unicast network {{ myvars.V6 }}/128
+    - add bgp bestpath as-path multipath-relax
+    - add bgp ipv4 unicast network {{ OUTSIDE_NET }}
+    - add bgp neighbor {{ JUMP_INET_IFS }} interface remote-as external
+    - add bgp ipv4 unicast neighbor {{ JUMP_INET_IFS }} activate
+    - add bgp ipv6 unicast neighbor {{ JUMP_INET_IFS }} activate
+#    - add interface {{ JUMP_INET_IFS }} mtu 9000
+    atomic: true
+    description: "unnumbered BGP gateway"
+
+- name: Start NetQ and Connect to the NetQ Telemetry Server
+  apt:
+    name: cumulus-netq
+    state: present
+  become: yes
+  register: _netq_install
+- block:
+  - service:
+      name: rsyslog
+      state: restarted
+    become: true
+  - service:
+      name: netqd
+      enabled: yes
+      state: restarted
+    become: true
+  when: _netq_install is changed
+- copy:
+    src: files/netq.yml
+    dest: "/etc/netq/netq.yml"
+    owner: root
+    group: root
+    mode: "u=rw,o=r,g=r"
+  become: yes
+  register: _netq_conf
+- block:
+  - pause:
+      seconds: 5
+  - shell: netq config restart agent
+  when: _netq_conf is changed
+- command: netq config add experimental
+- command: netq config restart agent
+
+
+- name: Set up DNAT for kubernetes dashboard
+  blockinfile:
+    dest: /etc/rc.local
+    insertbefore: "exit 0"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK dashboard DNAT"
+    block: |
+      /sbin/iptables -t nat -A PREROUTING -p tcp --dport {{ DASHBOARD_PORT }} --in-interface eth0 -j DNAT --to-destination {{ servervars[ MASTER_HOST ].DASHBOARD_IP }}:{{ DASHBOARD_PORT }}
+  become: true
+  register: _dashboard_dnat
+- iptables:
+    table: nat
+    chain: PREROUTING
+    in_interface: eth0
+    protocol: tcp
+    destination_port: 8001
+    jump: DNAT
+    to_destination: "{{ servervars[ MASTER_HOST ].DASHBOARD_IP }}:{{ DASHBOARD_PORT }}"
+  become: yes
+  when: _dashboard_dnat is changed
+...  
+

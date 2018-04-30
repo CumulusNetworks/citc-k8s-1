@@ -1,0 +1,25 @@
+---
+- name: Deploy a small system for evaluation with CITC
+  copy:
+    src: deploys1.yml
+    dest: /home/cumulus/deploys1.yml
+  register: _container1
+- copy:
+    src: deploys2.yml
+    dest: /home/cumulus/deploys2.yml
+  register: _container2
+- copy:
+    src: demo.sh
+    dest: /home/cumulus/demo.sh
+    mode: u+x
+  register: _script
+- blockinfile:
+    dest: /etc/rc.local
+    insertbefore: "exit 0"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK demo"
+    block: |
+      su -c "cd /home/cumulus && ./demo.sh" cumulus
+  become: yes
+- command: ./demo.sh
+  when: _container1 is changed or _container2 is changed or _script is changed
+...

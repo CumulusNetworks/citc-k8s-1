@@ -1,0 +1,8 @@
+---
+- name: Setup k8s and join the cluster
+  command: kubeadm join --token cumulu.soopersecrethere {{ servervars[ MASTER_HOST ].V4 }}:6443 --discovery-token-unsafe-skip-ca-verification
+  become: yes
+
+- name: Restart netq to pick up the installation
+  command: netq config restart agent
+...

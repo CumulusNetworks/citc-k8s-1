@@ -1,0 +1,81 @@
+---
+- name: ssh and sudo access
+  stat:
+    path: /home/cumulus/.ssh/authorized_keys
+  register: _ssh_keys
+- authorized_key:
+    user: cumulus
+    state: present
+    key: "{{ lookup('file', '/home/cumulus/.ssh/authorized_keys') }}"
+  when: not _ssh_keys.stat.exists
+- copy:
+    src: "{{ inventory_dir }}/files/no-passwd"
+    dest: "/etc/sudoers.d/"
+  become: yes
+
+- name: distribute the cluster hosts file
+  blockinfile:
+    dest: /etc/hosts
+    marker: "# {mark} ANSIBLE MANAGED BLOCK cluster hosts"
+    block: "{{ lookup('file', '{{ inventory_dir }}/files/hosts') }}"
+  become: true
+
+- name:  enable management VRF if it is not already on
+  command: ip addr show dev mgmt
+  ignore_errors: yes
+  changed_when: false
+  register: MGMT_VRF_CHECK
+- block:
+  - nclu:
+      commands:
+      - add vrf mgmt
+      atomic: true
+      description: "enable mgmt vrf"
+    async: 1
+    poll: 0
+    ignore_errors: true
+  - local_action: wait_for host={{ inventory_hostname }} state=started port=22 delay=10
+  - include_tasks: "{{ inventory_dir }}/roles/switch-common/tasks/reboot.yaml"
+  - service:
+      name: ntp
+      state: stopped
+      enabled: no
+    become: true
+  - service:
+      name: ntp@mgmt
+      state: started
+      enabled: yes
+    become: true
+  when: MGMT_VRF_CHECK.stdout.find('inet 127.0.0.1/8 scope host mgmt') == -1
+
+- name: install and start netq
+  apt_repository:
+    repo: deb https://apps3.cumulusnetworks.com/repos/deb CumulusLinux-3 netq-1.3
+    filename: netq
+    state: present
+  become: true
+- apt:
+    name: cumulus-netq
+    update_cache: yes
+    state: latest
+  become: true
+- service:
+    name: rsyslog
+    state: restarted
+  become: true
+- service:
+    name: netqd
+    state: stopped
+    enabled: no
+  become: true
+- service:
+    name: netqd@mgmt
+    state: started
+    enabled: yes
+  become: true
+- pause:
+    seconds: 10
+- command: netq config add server 192.168.0.254 vrf mgmt
+- command: netq config add experimental
+- shell: netq config restart agent
+...

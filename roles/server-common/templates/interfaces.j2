@@ -1,0 +1,31 @@
+#########
+# Configured by Ansible
+#########
+{% set myvars = servervars[ansible_hostname] -%}
+
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+
+auto lo:1
+allow-ansible lo:1
+iface lo:1 inet static
+  address {{ myvars.V4 }}/32
+
+auto eth1
+allow-ansible eth1
+iface eth1 inet manual
+  mtu 9000
+
+auto eth2
+allow-ansible eth2
+iface eth2 inet manual
+  mtu 9000
+
+auto cbr0
+allow-ansible cbr0
+iface cbr0 inet manual
+  pre-up ip link add name cbr0 type bridge
+  post-down ip link del cbr0

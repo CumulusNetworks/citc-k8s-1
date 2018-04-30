@@ -1,0 +1,187 @@
+#
+# prep the servers for doing fun stuff :-)
+#
+---
+- set_fact:
+    myvars: "{{ servervars[inventory_hostname] }}"
+
+- name: ssh and sudo access
+  stat:
+    path: /home/cumulus/.ssh/authorized_keys
+  register: _ssh_keys
+- authorized_key:
+    user: cumulus
+    state: present
+    key: "{{ lookup('file', '/home/cumulus/.ssh/authorized_keys') }}"
+  when: not _ssh_keys.stat.exists
+- copy:
+    src: "{{ inventory_dir }}/files/no-passwd"
+    dest: "/etc/sudoers.d/"
+  become: yes
+
+- name: distribute the cluster hosts file
+  blockinfile:
+    dest: /etc/hosts
+    marker: "# {mark} ANSIBLE MANAGED BLOCK cluster hosts"
+    block: "{{ lookup('file', '{{ inventory_dir }}/files/hosts') }}"
+
+- name: install useful operational packages
+  apt:
+    name: "{{ item }}"
+  with_items:
+  - zile
+  - lldpd
+  - traceroute
+  - ifupdown
+  - tcpdump
+  - ethtool
+  - bridge-utils
+
+- name: configure and restart lldpd
+  lineinfile:
+    dest: /etc/lldpd.d/port_info.conf
+    line: "configure lldp portidsubtype ifname"
+    create: yes
+- service:
+    name: lldpd
+    enabled: yes
+    state: started
+
+- name: Configure network interfaces (but leave down until FRR is installed)
+  shell: ifdown --force --all --allow=ansible
+  ignore_errors: yes
+- template:
+    src: interfaces.j2
+    dest: /etc/network/interfaces
+    mode: "u=rw,g=r,o=r"
+
+- name: enable IP routing
+  copy:
+    src: 99cumulus_defaults
+    dest: /etc/sysctl.d/99cumulus_defaults.conf
+    owner: root
+    group: root
+    mode: "u=rw,g=r,o=r"
+  register: _sysctl_conf
+- command: 'sysctl --system'
+  when: _sysctl_conf is changed
+
+- name: install and start FRR
+  copy:
+    src: files/frr_3.2+cl3u4_amd64.deb
+    dest: "/tmp"
+- apt:
+    deb: /tmp/frr_3.2+cl3u4_amd64.deb
+- template:
+    src: frr.conf.j2
+    dest: /etc/frr/frr.conf
+    owner: frr
+    group: frr
+    mode: "u=rw,g=r,o=r"
+- copy:
+    src: "daemons"
+    dest: "/etc/frr/daemons"
+    owner: frr
+    group: frr
+    mode: "u=rw,g=r,o=r"
+- service:
+    name: frr
+    enabled: yes
+    state: restarted
+
+- name: Kick the fabric facing interfaces
+  shell: ifdown --force --all --allow=ansible && ifup --force --all --allow=ansible
+
+- name: Add repositories/packages for NetQ, Docker, and k8s
+  apt_key:
+    keyserver: keyserver.ubuntu.com
+    id: A88BBC95
+- apt_repository:
+    repo: deb [arch=amd64] https://apps3.cumulusnetworks.com/repos/deb xenial netq-1.3
+    filename: netq
+    state: present
+- apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+- apt_repository:
+    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu xenial stable
+    state: present
+- apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+- apt_repository:
+    repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
+    state: present
+- apt:
+    update_cache: yes
+- apt:
+    name: "{{ item }}"
+    force: yes
+  with_items:
+  - python-pip
+  - docker-ce=17.03.2~ce-0~ubuntu-xenial
+  - kubeadm=1.9.2-00
+  - kubelet=1.9.2-00
+  - kubectl=1.9.2-00
+  - cumulus-netq
+- pip:
+    name: docker-py
+
+- name: Disable swap because kubernetes REALLY doesn't like it
+  command: swapoff -a
+  ignore_errors: yes
+- replace:
+    path: /etc/fstab
+    regexp: '(^[^#\n]* swap .*$)'
+    replace: '# \1'
+
+- name: Start Docker & Kubernetes
+  copy:
+    src: files/docker-daemon.json
+    dest: /etc/docker/daemon.json
+  register: _docker_conf
+- template:
+    src: 10-kubeadm.conf.j2
+    dest: /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+  register: _kubeadm_conf
+- block:
+  - command: systemctl daemon-reload
+  - service:
+      name: "{{ item }}"
+      state: restarted
+      enabled: yes
+    with_items:
+    - docker
+    - kubelet
+  when: _kubeadm_conf is changed or _docker_conf is changed
+
+- name: Get ready for k8s and calico
+  docker_network:
+    name: docker0
+    state: absent
+  ignore_errors: yes
+- command: ip link delete docker0
+  ignore_errors: yes
+- command: iptables -t nat -F
+- command: iptables -F
+- command: iptables -X
+
+- name: Start NetQ and connect to the Telemetry Server
+  service:
+    name: rsyslog
+    state: restarted
+- copy:
+    src: files/netq.yml
+    dest: "/etc/netq/netq.yml"
+    owner: root
+    group: root
+    mode: "u=rw,o=r,g=r"
+- service:
+    name: netqd
+    enabled: yes
+    state: restarted
+- pause:
+    seconds: 5
+- command: netq config add experimental
+- shell: netq config restart agent
+...

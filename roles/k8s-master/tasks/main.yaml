@@ -1,0 +1,58 @@
+---
+- name: Set up the kubernetes cluster
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: _kubelet_conf
+- command: kubeadm --apiserver-advertise-address={{ servervars[ MASTER_HOST ].V4 }} --pod-network-cidr=10.244.0.0/16 --token=cumulu.soopersecrethere init
+  become: yes
+  when: not _kubelet_conf.stat.exists
+
+- name: provision-server01-calico
+  file:
+    path: /home/cumulus/.kube
+    state: directory
+- file:
+    path: /home/cumulus/.kube/config
+    state: absent
+- copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /home/cumulus/.kube/config
+    remote_src: yes
+    owner: cumulus
+    group: cumulus
+    mode: oug=rwx
+  become: yes
+- name: Install and enable Calico
+  copy:
+    src: files/kube-calico.yml
+    dest: /home/cumulus/kube-calico.yml
+  register: _calico_conf
+- command: kubectl apply -f /home/cumulus/kube-calico.yml
+  when: _calico_conf is changed
+
+- name: Connect NetQ to the Kubernetes master
+  command: netq config add agent kubernetes-monitor
+- command: netq config restart agent
+
+- name: Set up the dashboard and make it persist across reboots
+  copy:
+    src: dashboard.yml
+    dest: /home/cumulus/dashboard.yml
+    owner: cumulus
+    group: cumulus
+    mode: oug=rw
+- template:
+    src: dashboard.sh.j2
+    dest: /home/cumulus/dashboard.sh
+    mode: "u=rwx,go=r"
+- blockinfile:
+    dest: /etc/rc.local
+    insertbefore: "exit 0"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK dashboard"
+    block: |
+      su -c "cd /home/cumulus && ./dashboard.sh" cumulus
+  become: yes
+  register: _dashboard
+- command: ./dashboard.sh
+  when: _dashboard is changed
+...
