@@ -36,6 +36,7 @@ vm server03 ubuntu-16.04 2 4 4
 vm server04 ubuntu-16.04 2 4 4
 
 network oob-mgmt-server eth0 10.255.0.1 255.255.0.0 public
+service oob-mgmt-server http2 eth0 1337 TCP public
 service oob-mgmt-server ssh eth0 22 TCP public
 service oob-mgmt-server netq eth0 9000 TCP public
 service oob-mgmt-server dashboard eth0 8001 TCP public
