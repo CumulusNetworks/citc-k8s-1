@@ -44,6 +44,12 @@
     atomic: true
     description: "unnumbered BGP gateway"
 
+- name: Workaround a bug
+  shell: "ip link set mtu 9000 dev eth2"
+  become: yes
+- shell: "ip link set mtu 9000 dev eth3"
+  become: yes
+  
 - name: Start NetQ and Connect to the NetQ Telemetry Server
   apt:
     name: cumulus-netq
