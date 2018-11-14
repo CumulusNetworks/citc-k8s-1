@@ -42,7 +42,6 @@
 - hosts: servers
   roles:
   - server-common
-  become: yes
 
 - hosts: server01
   roles:
