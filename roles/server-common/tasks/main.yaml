@@ -221,6 +221,13 @@
   become: yes
 - command: iptables -X
   become: yes
+- lineinfile:
+    path: /etc/modules
+    regexp: 'br_netfilter'
+    line: 'br_netfilter'
+  become: yes
+- command: modprobe br_netfilter
+  become: yes
 
 - name: Start NetQ and connect to the Telemetry Server
   service:
