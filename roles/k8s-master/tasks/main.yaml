@@ -27,48 +27,63 @@
   stat:
     path: /etc/kubernetes/kubelet.conf
   register: _kubelet_conf
-- command: kubeadm --apiserver-advertise-address={{ servervars[ MASTER_HOST ].V4 }} --pod-network-cidr=10.244.0.0/16 --token=cumulu.soopersecrethere init
+- block:
+  - command: kubeadm config images pull
+  - command: kubeadm --apiserver-advertise-address={{ servervars[ MASTER_HOST ].V4 }} --pod-network-cidr=10.244.0.0/16 --token=cumulu.soopersecrethere --ignore-preflight-errors=NumCPU init
   become: yes
   when: not _kubelet_conf.stat.exists
 
-- name: provision-server01-calico
-  file:
-    path: /home/cumulus/.kube
-    state: directory
-- file:
-    path: /home/cumulus/.kube/config
-    state: absent
-- copy:
-    src: /etc/kubernetes/admin.conf
-    dest: /home/cumulus/.kube/config
-    remote_src: yes
-    owner: cumulus
-    group: cumulus
-    mode: oug=rwx
-  become: yes
-- name: Install and enable Calico
-  copy:
-    src: files/kube-calico.yml
-    dest: /home/cumulus/kube-calico.yml
-  register: _calico_conf
-- command: kubectl apply -f /home/cumulus/kube-calico.yml
-  when: _calico_conf is changed
+- name: Allow cumulus user to execute kubectl
+  block:
+  -  file:
+      path: /home/cumulus/.kube
+      state: directory
+  - file:
+      path: /home/cumulus/.kube/config
+      state: absent
+  - copy:
+      src: /etc/kubernetes/admin.conf
+      dest: /home/cumulus/.kube/config
+      remote_src: yes
+      owner: cumulus
+      group: cumulus
+      mode: oug=rwx
+    become: yes
+  when: not _kubelet_conf.stat.exists
+
+- name: Install and enable Flannel
+  shell: ps aux | grep -q [f]lanneld
+  ignore_errors: true
+  register: _cni_running
+- command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+  when: _cni_running is failed
 
 - name: Connect NetQ to the Kubernetes master
   command: netq config add agent kubernetes-monitor
 - command: netq config restart agent
 
 - name: Set up the dashboard and make it persist across reboots
-  copy:
-    src: dashboard.yml
-    dest: /home/cumulus/dashboard.yml
+  get_url:
+    url: https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended/kubernetes-dashboard.yaml
+    dest: /home/cumulus/
+- blockinfile:
+    dest: /home/cumulus/kubernetes-dashboard.yaml
+    insertafter: "args:"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK enable-skip-login"
+    block: |6
+                    - --enable-skip-login
+- copy:
+    src: dashboard-rolebindings.yaml
+    dest: /home/cumulus/dashboard-rolebindings.yaml
     owner: cumulus
     group: cumulus
     mode: oug=rw
+  register: _dashboard_rolebindings
 - template:
     src: dashboard.sh.j2
     dest: /home/cumulus/dashboard.sh
     mode: "u=rwx,go=r"
+  register: _dashboard_sh
 - blockinfile:
     dest: /etc/rc.local
     insertbefore: "exit 0"
@@ -76,7 +91,7 @@
     block: |
       su -c "cd /home/cumulus && ./dashboard.sh" cumulus
   become: yes
-  register: _dashboard
+  register: _dashboard_rc
 - command: ./dashboard.sh
-  when: _dashboard is changed
+  when: _dashboard_rolebindings is changed or _dashboard_sh is changed or _dashboard_rc is changed
 ...

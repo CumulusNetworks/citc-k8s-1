@@ -42,13 +42,6 @@
     dest: "/etc/sudoers.d/"
   become: yes
 
-- name: distribute the cluster hosts file
-  blockinfile:
-    dest: /etc/hosts
-    marker: "# {mark} ANSIBLE MANAGED BLOCK cluster hosts"
-    block: "{{ lookup('file', '{{ inventory_dir }}/files/hosts') }}"
-  become: yes
-
 - name: install useful operational packages
   apt:
     name:
@@ -129,6 +122,16 @@
   shell: ifdown --force --all --allow=ansible && ifup --force --all --allow=ansible
   become: yes
 
+- name: Disable swap because kubernetes REALLY doesn't like it
+  command: swapoff -a
+  ignore_errors: yes
+  become: yes
+- replace:
+    path: /etc/fstab
+    regexp: '(^[^#\n]* swap .*$)'
+    replace: '# \1'
+  become: yes
+
 - name: Add repositories/packages for NetQ, Docker, and k8s
   apt_key:
     keyserver: keyserver.ubuntu.com
@@ -172,41 +175,23 @@
     name: docker-py
   become: yes
 
-- name: Disable swap because kubernetes REALLY doesn't like it
-  command: swapoff -a
-  ignore_errors: yes
-  become: yes
-- replace:
-    path: /etc/fstab
-    regexp: '(^[^#\n]* swap .*$)'
-    replace: '# \1'
-  become: yes
-
 - name: Start Docker & Kubernetes
   copy:
     src: files/docker-daemon.json
     dest: /etc/docker/daemon.json
   become: yes
   register: _docker_conf
-- template:
-    src: 10-kubeadm.conf.j2
-    dest: /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
-  become: yes
-  register: _kubeadm_conf
 - block:
   - command: systemctl daemon-reload
     become: yes
   - service:
-      name: "{{ item }}"
+      name: docker
       state: restarted
       enabled: yes
     become: yes
-    with_items:
-    - docker
-    - kubelet
-  when: _kubeadm_conf is changed or _docker_conf is changed
+  when: _docker_conf is changed
 
-- name: Get ready for k8s and calico
+- name: Get ready for k8s and flannel
   docker_network:
     name: docker0
     state: absent

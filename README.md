@@ -1,6 +1,6 @@
 # Kubernetes for Cumulus in the Cloud
 
-This repository is used to configure a reference topology with Kubernetes 1.9.x for Cumulus-in-the-Cloud deployment.
+This repository is used to configure a reference topology with Kubernetes for Cumulus-in-the-Cloud deployment.
 
 ## Network Architecture
 
@@ -10,7 +10,7 @@ This environment uses FRRouting from HostPack for host L3 peering with the data 
 
 ## Kubernetes Environment
 
-Kubernetes is deployed on four functional Ubuntu 16.04 nodes.  The master is server01 with server02-server04 acting as worker nodes.  Calico (https://www.projectcalico.org) provides the CNI and IPAM for this deployment.  The environment comes up with a demo "application" consisting of two containsers being deployed with with five instances.
+Kubernetes is deployed on four functional Ubuntu 16.04 nodes.  The master is server01 with server02-server04 acting as worker nodes.  Flannel ( and https://github.com/coreos/flannel) provides the CNI and IPAM for this deployment.  The environment comes up with a demo "application" consisting of two containsers being deployed with with five instances.
 
 ## UIs
 Besides console/ssh access into the oob-mgmt-server, the environment exports two web based UIs: NetQ Telemetry Server and the Kubernetes dashboard.
@@ -24,4 +24,15 @@ and the UIs are accessed at the Telemetry Server's (jumpbox) IP adderess at...
 
 * __NetQ__ : http://IP:9000 (user/password = admin/CumulusNetQ!)
 
-* __Kubernetes__ : http://IP:8001/ui (SKIP authentication)
+* __Kubernetes__ : http://IP:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/ (SKIP authentication)
+
+## Additional References
+
+Here are pointers to the Kubernetes documentation that were permanently in my browser while I created the deployment...
+
+* https://kubernetes.io/docs/setup/independent/install-kubeadm/
+* https://kubernetes.io/docs/setup/cri/
+* https://kubernetes.io/docs/setup/independent/create-cluster-kubeadm/
+* https://kubernetes.io/docs/reference/kubectl/overview/
+* https://kubernetes.io/docs/setup/independent/create-cluster-kubeadm/#tabs-pod-install-1
+* https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/
