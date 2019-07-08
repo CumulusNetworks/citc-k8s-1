@@ -64,7 +64,7 @@
 
 - name: Set up the dashboard and make it persist across reboots
   get_url:
-    url: https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended/kubernetes-dashboard.yaml
+    url: https://raw.githubusercontent.com/kubernetes/dashboard/v1.10.1/src/deploy/recommended/kubernetes-dashboard.yaml
     dest: /home/cumulus/
 - blockinfile:
     dest: /home/cumulus/kubernetes-dashboard.yaml
