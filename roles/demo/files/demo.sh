@@ -24,10 +24,10 @@
 # https://www.debian.org/legal/licenses/mit
 # 
 
-kubectl get deployments | grep -q ubuntu1 || {
+kubectl get deployments | grep -q apache1 || {
     kubectl create -f deploys1.yml
 }
 
-kubectl get deployments | grep -q ubuntu2 || {
+kubectl get deployments | grep -q apache2 || {
     kubectl create -f deploys2.yml
 }
