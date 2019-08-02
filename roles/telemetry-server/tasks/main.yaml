@@ -100,5 +100,5 @@
   register: _dashboard_forwarding
 - command: source /etc/rc.local
   become: yes
-  when: _dashboard_dnat is changed
+  when: _dashboard_forwarding is changed
 ...  
