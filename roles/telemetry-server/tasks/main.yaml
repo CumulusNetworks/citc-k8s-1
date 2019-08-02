@@ -84,23 +84,21 @@
 - command: netq config restart agent
 
 
-- name: Set up DNAT for kubernetes dashboard
+- name: Set up TCP forwarding for kubernetes dashboard
   blockinfile:
     dest: /etc/rc.local
     insertbefore: "exit 0"
-    marker: "# {mark} ANSIBLE MANAGED BLOCK dashboard DNAT"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK dashboard forwarding"
     block: |
-      /sbin/iptables -t nat -A PREROUTING -p tcp --dport {{ DASHBOARD_PORT }} --in-interface eth0 -j DNAT --to-destination {{ servervars[ MASTER_HOST ].DASHBOARD_IP }}:{{ DASHBOARD_PORT }}
+      ps aux | grep -q "socat TCP4-LISTEN:8001" || {
+          socat TCP4-LISTEN:8001,fork,so-bindtodevice=eth0 TCP4:192.168.0.31:8001
+      }
+      ps aux | grep -q "socat TCP6-LISTEN:8001" || {
+          socat TCP6-LISTEN:8001,fork,so-bindtodevice=eth0 TCP4:192.168.0.31:8001
+      }
   become: true
-  register: _dashboard_dnat
-- iptables:
-    table: nat
-    chain: PREROUTING
-    in_interface: eth0
-    protocol: tcp
-    destination_port: 8001
-    jump: DNAT
-    to_destination: "{{ servervars[ MASTER_HOST ].DASHBOARD_IP }}:{{ DASHBOARD_PORT }}"
+  register: _dashboard_forwarding
+- command: source /etc/rc.local
   become: yes
   when: _dashboard_dnat is changed
 ...  
