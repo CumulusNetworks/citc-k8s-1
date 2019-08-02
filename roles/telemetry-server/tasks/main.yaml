@@ -26,6 +26,7 @@
 - set_fact:
     myvars: "{{ servervars[inventory_hostname] }}"
 
+
 - name:  Unnumbered BGP routing (v4 & v6) to the fabric
   nclu:
     commands:
@@ -83,22 +84,21 @@
 - command: netq config add experimental
 - command: netq config restart agent
 
-
-- name: Set up TCP forwarding for kubernetes dashboard
+- name: Set up forwarding for kubernetes dashboard
   blockinfile:
     dest: /etc/rc.local
     insertbefore: "exit 0"
     marker: "# {mark} ANSIBLE MANAGED BLOCK dashboard forwarding"
     block: |
-      ps aux | grep -q "socat TCP4-LISTEN:8001" || {
-          socat TCP4-LISTEN:8001,fork,so-bindtodevice=eth0 TCP4:192.168.0.31:8001
+      iptables -t nat -L | egrep -q "tcp.*to:192.168.0.31:8001" || {
+          /sbin/iptables -t nat -A PREROUTING -p tcp --dport 8001 --in-interface eth0 -j DNAT --to-destination 192.168.0.31:8001
       }
-      ps aux | grep -q "socat TCP6-LISTEN:8001" || {
-          socat TCP6-LISTEN:8001,fork,so-bindtodevice=eth0 TCP4:192.168.0.31:8001
+      ps aux | grep -q "[s]ocat TCP6-LISTEN:8001" || {
+          socat TCP6-LISTEN:8001,fork,so-bindtodevice=eth0 TCP4:192.168.0.31:8001 &
       }
   become: true
   register: _dashboard_forwarding
-- command: source /etc/rc.local
+- command: /etc/rc.local
   become: yes
   when: _dashboard_forwarding is changed
 ...  
